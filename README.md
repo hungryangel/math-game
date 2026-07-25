@@ -13,6 +13,17 @@ python3 -m http.server 8899
 
 브라우저에서 `http://localhost:8899` 접속. (`index.html`을 더블클릭해 파일로 바로 열어도 동작합니다.)
 
+## 수정 후 배포할 때 (중요)
+
+`index.html`의 `?v=3` 숫자를 **하나 올린 뒤** 커밋하세요.
+
+```bash
+sed -i '' 's/?v=3/?v=4/g' index.html
+```
+
+브라우저가 이전 `js`·`css`를 캐시해 두기 때문에, 이 숫자를 바꾸지 않으면
+배포해도 학생 화면에는 예전 버전이 그대로 보일 수 있습니다.
+
 ## GitHub Pages 배포
 
 저장소에 그대로 올린 뒤 Settings → Pages → Source를 `main` 브랜치 루트로 지정하면 됩니다.
