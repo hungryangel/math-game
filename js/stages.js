@@ -47,6 +47,19 @@
         { id: '3-4', name: '실전 연습', ops: MOVE_OPS, types: ['predict', 'identify'], count: 6 },
         { id: '3-5', name: '최종 도전!', ops: MOVE_OPS, types: ['predict', 'identify', 'build'], count: 8, buildSteps: [1, 3], boss: true }
       ]
+    },
+    {
+      // 교과서와 같은 형식: 모눈종이에 점을 찍어 이동한 도형을 직접 그린다
+      id: 4, title: '교과서 모눈종이', emoji: '📐', color: '#0ea5e9',
+      desc: '모눈종이에 점을 찍어 직접 그려요',
+      stages: [
+        { id: '4-1', name: '모눈종이에 밀기', ops: [], types: ['draw'], kinds: ['slide'], count: 3 },
+        { id: '4-2', name: '기준선으로 좌우 뒤집기', ops: [], types: ['draw'], kinds: ['flipH'], count: 3 },
+        { id: '4-3', name: '기준선으로 위아래 뒤집기', ops: [], types: ['draw'], kinds: ['flipV'], count: 3 },
+        { id: '4-4', name: '한 점을 중심으로 돌리기', ops: [], types: ['draw'], kinds: ['rot90', 'rot180', 'rot270'], count: 3 },
+        { id: '4-5', name: '교과서 종합 문제', ops: [], types: ['draw'],
+          kinds: ['slide', 'flipH', 'flipV', 'rot90', 'rot180', 'rot270'], count: 4, boss: true }
+      ]
     }
   ];
 
@@ -125,12 +138,15 @@
   }
 
   function makeQuestion(cfg, usedShapeIds) {
+    if (cfg.types.length === 1 && cfg.types[0] === 'draw') return global.GridMode.makeDraw(cfg);
+
     const avail = SHAPES.filter(s => !usedShapeIds.has(s.id));
     const shape = pick(avail.length ? avail : SHAPES);
     usedShapeIds.add(shape.id);
     if (usedShapeIds.size >= SHAPES.length) usedShapeIds.clear();
 
     const type = pick(cfg.types);
+    if (type === 'draw') return global.GridMode.makeDraw(cfg);
     if (type === 'identify') return makeIdentify(cfg, shape);
     if (type === 'build') return makeBuild(cfg, shape);
     return makePredict(cfg, shape);

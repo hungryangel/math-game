@@ -17,9 +17,11 @@
   const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) {} };
   const starsOf = id => progress[id] || 0;
   const totalStars = () => ALL_STAGES.reduce((s, st) => s + starsOf(st.id), 0);
+  // 각 챕터의 첫 스테이지는 항상 열어 둔다 (원하는 주제로 바로 들어갈 수 있게)
   const isUnlocked = id => {
     const i = ALL_STAGES.findIndex(s => s.id === id);
-    return i === 0 || starsOf(ALL_STAGES[i - 1].id) > 0;
+    if (i <= 0) return true;
+    return ALL_STAGES[i].chapter.id !== ALL_STAGES[i - 1].chapter.id || starsOf(ALL_STAGES[i - 1].id) > 0;
   };
 
   /* ---------- 토스트 ---------- */
@@ -143,9 +145,14 @@
           <span class="menu-text"><b>배우기 놀이터</b><span>버튼을 눌러 도형이 어떻게 움직이는지 직접 확인해요</span></span>
           <span class="menu-arrow">›</span>
         </button>
+        <button class="menu-item" data-go="paper">
+          <span class="menu-emoji">📐</span>
+          <span class="menu-text"><b>교과서 모눈종이</b><span>기준선·회전 중심을 보고 점을 찍어 직접 그려요</span></span>
+          <span class="menu-arrow">›</span>
+        </button>
         <button class="menu-item" data-go="map">
           <span class="menu-emoji">🗺️</span>
-          <span class="menu-text"><b>도전하기</b><span>15개 스테이지를 차례로 깨고 별을 모아요</span></span>
+          <span class="menu-text"><b>도전하기</b><span>${ALL_STAGES.length}개 스테이지를 차례로 깨고 별을 모아요</span></span>
           <span class="menu-arrow">›</span>
         </button>
         <button class="menu-item" data-go="random">
@@ -170,6 +177,7 @@
         const go = b.dataset.go;
         if (go === 'learn') renderLearn();
         else if (go === 'map') renderMap();
+        else if (go === 'paper') startStage(stageById('4-1'));
         else startStage({
           id: 'random', name: '랜덤 연습', ops: window.Shapes.MOVE_OPS,
           types: ['predict', 'identify', 'build'], count: 8, buildSteps: [1, 2],
@@ -177,6 +185,7 @@
         }, true);
       };
     });
+    show('home');   // 다른 화면에서 홈으로 돌아올 때도 화면이 실제로 전환되도록
   }
 
   /* =========================================================
@@ -196,7 +205,7 @@
       <div class="card">
         <div class="chips" id="l-chips"></div>
         <div class="learn-stage" id="l-stage"></div>
-        <div class="ghost-note" id="l-note">👆 아래 버튼을 눌러 보세요</div>
+        <div class="ghost-note" id="l-note">👇 아래 버튼을 눌러 보세요</div>
         <div class="op-grid" id="l-ops"></div>
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn ghost block" id="l-reset">↩︎ 처음 모양으로</button>
@@ -231,7 +240,7 @@
       b.classList.add('on');
       shape = SHAPES[+b.dataset.i];
       mount();
-      $('#l-note').textContent = '👆 아래 버튼을 눌러 보세요';
+      $('#l-note').textContent = '👇 아래 버튼을 눌러 보세요';
     };
 
     $('#l-ops').onclick = async e => {
@@ -346,6 +355,7 @@
     const q = S.qs[S.idx];
     if (q.type === 'predict') renderPredict(q);
     else if (q.type === 'identify') renderIdentify(q);
+    else if (q.type === 'draw') renderDraw(q);
     else renderBuild(q);
     $('#q-back').onclick = () => {
       Sound.play('tap');
@@ -483,6 +493,66 @@
     $('#q-reset').onclick = () => {
       if (done || stage.busy) return;
       Sound.play('tap'); stage.set(q.shape.rows); moves = 0; updateMoves();
+    };
+  }
+
+  /* ---------- 유형 4: 모눈종이에 직접 그리기 (교과서형) ---------- */
+  function renderDraw(q) {
+    const GM = window.GridMode;
+    let user = [], locked = false;
+
+    $('#screen-quiz').innerHTML = `
+      ${headHTML()}
+      <div class="card">
+        <div class="q-prompt">${q.prompt}</div>
+        <div class="legend">
+          <span><i class="sw orig"></i>처음 도형</span>
+          <span><i class="sw mine"></i>내가 그린 도형</span>
+          ${q.axis ? '<span><i class="sw axis"></i>기준선</span>' : ''}
+          ${q.center ? '<span><i class="sw ctr"></i>회전 중심</span>' : ''}
+        </div>
+        <div class="paper-wrap" id="q-paper"></div>
+        <div class="move-count" id="q-count"></div>
+        <div class="draw-tools">
+          <button class="btn ghost" id="q-undo">↩︎ 한 점 지우기</button>
+          <button class="btn ghost" id="q-clear">🧽 전체 지우기</button>
+        </div>
+        <button class="btn block" id="q-check" style="margin-top:10px" disabled>정답 확인</button>
+        <div id="q-feed"></div>
+      </div>`;
+
+    const paint = () => {
+      $('#q-paper').innerHTML = GM.svg(q, user, { locked, showAnswer: locked });
+      $('#q-count').innerHTML = `찍은 점 <b>${user.length}</b> / ${q.need}개`;
+      $('#q-check').disabled = locked || user.length !== q.need;
+    };
+    paint();
+
+    $('#q-paper').onclick = e => {
+      const hit = e.target.closest('.hit');
+      if (!hit || locked) return;
+      const x = +hit.dataset.x, y = +hit.dataset.y;
+      const last = user[user.length - 1];
+      if (last && last[0] === x && last[1] === y) user.pop();          // 마지막 점을 다시 누르면 취소
+      else if (user.some(p => p[0] === x && p[1] === y)) { toast('이미 찍은 점이에요'); return; }
+      else if (user.length >= q.need) { toast(`점은 ${q.need}개까지만 찍을 수 있어요`); return; }
+      else user.push([x, y]);
+      Sound.play('tap');
+      paint();
+    };
+
+    $('#q-undo').onclick = () => { if (locked || !user.length) return; user.pop(); Sound.play('tap'); paint(); };
+    $('#q-clear').onclick = () => { if (locked) return; user = []; Sound.play('tap'); paint(); };
+
+    $('#q-check').onclick = async () => {
+      if (locked || user.length !== q.need) return;
+      const ok = GM.sameSet(user, q.answer);
+      locked = true;
+      if (ok) user = q.answer.slice();     // 정답이면 꼭짓점 순서대로 반듯하게 다시 그려 준다
+      paint();
+      await showFeedback(ok, q, null, ok
+        ? `<b>정확해요!</b> ${q.hint}`
+        : `<b>아쉬워요!</b> ${q.hint}<br>초록 점선이 정답 위치예요. 꼭짓점 하나씩 칸을 세어 비교해 보세요.`);
     };
   }
 
