@@ -16,6 +16,17 @@
   /* ---------- 챕터 & 스테이지 ---------- */
   const CHAPTERS = [
     {
+      // 교과서 4단원의 첫 차시 (110~111쪽)
+      id: 0, title: '점 이동하기', emoji: '📍', color: '#14b8a6',
+      desc: '모눈에서 점을 위·아래·왼쪽·오른쪽으로',
+      stages: [
+        { id: 'P-1', name: '점을 한 방향으로 옮기기', ops: [], types: ['textbook'], kinds: ['point'], count: 4 },
+        { id: 'P-2', name: '두 방향으로 옮기기 (cm)', ops: [], types: ['textbook'], kinds: ['point'],
+          twoStep: true, unit: 'cm', count: 4 },
+        { id: 'P-3', name: '어떻게 이동했을까?', ops: [], types: ['textbook'], kinds: ['pointBack'], count: 4 }
+      ]
+    },
+    {
       id: 1, title: '뒤집기 마을', emoji: '🪞', color: '#6366f1',
       desc: '거울처럼 좌우·위아래를 바꿔 봐요',
       stages: [
@@ -59,6 +70,20 @@
         { id: '4-4', name: '한 점을 중심으로 돌리기', ops: [], types: ['draw'], kinds: ['rot90', 'rot180', 'rot270'], count: 3 },
         { id: '4-5', name: '교과서 종합 문제', ops: [], types: ['draw'],
           kinds: ['slide', 'flipH', 'flipV', 'rot90', 'rot180', 'rot270'], count: 4, boss: true }
+      ]
+    },
+    {
+      // 교과서의 '알맞은 말에 ○표' 개념 확인 문제 (112~118쪽)
+      id: 5, title: '개념 다지기', emoji: '💡', color: '#8b5cf6',
+      desc: '교과서 핵심 문장을 완성해요',
+      stages: [
+        { id: 'C-1', name: '밀기·뒤집기 개념', ops: [], types: ['textbook'], kinds: ['concept'],
+          topics: ['slide', 'flip'], count: 5 },
+        { id: 'C-2', name: '몇 cm 밀었을까?', ops: [], types: ['textbook'], kinds: ['distance'], count: 4 },
+        { id: 'C-3', name: '돌리기 개념 완성', ops: [], types: ['textbook'], kinds: ['concept'],
+          topics: ['turn'], count: 5 },
+        { id: 'C-4', name: '개념 종합 도전', ops: [], types: ['textbook'],
+          kinds: ['concept', 'distance', 'pointBack'], count: 6, boss: true }
       ]
     }
   ];
@@ -139,6 +164,7 @@
 
   function makeQuestion(cfg, usedShapeIds) {
     if (cfg.types.length === 1 && cfg.types[0] === 'draw') return global.GridMode.makeDraw(cfg);
+    if (cfg.types.length === 1 && cfg.types[0] === 'textbook') return global.Textbook.make(cfg);
 
     const avail = SHAPES.filter(s => !usedShapeIds.has(s.id));
     const shape = pick(avail.length ? avail : SHAPES);
@@ -152,10 +178,34 @@
     return makePredict(cfg, shape);
   }
 
+  // 같은 문제인지 판단하는 키.
+  // predict/identify는 문장이 같아도 도형이 다르면 다른 문제이므로 도형까지 포함한다.
+  function qKey(q) {
+    const s = q.shape ? q.shape.id : '';
+    switch (q.type) {
+      case 'predict':
+      case 'identify': return `${q.type}|${s}|${q.op}`;
+      case 'build':    return `build|${s}|${key(q.target)}`;
+      case 'draw':     return `draw|${q.kind}|${key(q.start.map(String))}`;
+      case 'point':    return `point|${q.prompt}|${q.from}`;
+      default:         return `${q.type}|${q.prompt}|${(q.options || []).join('§')}`;
+    }
+  }
+
   function buildStage(stage) {
     const used = new Set();
     const qs = [];
-    for (let i = 0; i < stage.count; i++) qs.push(makeQuestion(stage, used));
+    const seen = new Set();
+    for (let i = 0; i < stage.count; i++) {
+      // 같은 스테이지 안에서 똑같은 문제가 반복되지 않도록 다시 뽑는다
+      let q = null;
+      for (let t = 0; t < 30; t++) {
+        q = makeQuestion(stage, used);
+        if (!seen.has(qKey(q))) break;
+      }
+      seen.add(qKey(q));
+      qs.push(q);
+    }
     return qs;
   }
 

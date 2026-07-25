@@ -167,25 +167,71 @@
     return Object.assign(q, { type: 'draw', need: q.start.length });
   }
 
-  /* ---------- SVG 렌더 ---------- */
-  const poly = pts => pts.map(([x, y]) => `${PAD + x * CELL},${PAD + y * CELL}`).join(' ');
+  /* ---------- SVG 렌더 (조각을 나눠 두어 다른 문제 유형에서도 재사용) ---------- */
+  const px = x => PAD + x * CELL, py = y => PAD + y * CELL;
+  const poly = pts => pts.map(([x, y]) => `${px(x)},${py(y)}`).join(' ');
 
-  function svg(q, user, opts) {
-    opts = opts || {};
-    const px = x => PAD + x * CELL, py = y => PAD + y * CELL;
-    let s = `<svg class="paper" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">
-      <defs>
-        <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
-          <path d="M0,0 L9,4.5 L0,9 z" fill="#0ea5e9"/>
-        </marker>
-      </defs>
-      <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="#f8fbff"/>`;
+  const DEFS = `<defs>
+      <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#0ea5e9"/>
+      </marker>
+      <marker id="ahg" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 z" fill="#16a34a"/>
+      </marker>
+    </defs>`;
 
-    // 모눈
+  function frame() {                              // 모눈종이 배경 + 격자선
+    let s = `<rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="#f8fbff"/>`;
     for (let x = 0; x <= COLS; x++)
       s += `<line x1="${px(x)}" y1="${py(0)}" x2="${px(x)}" y2="${py(ROWS)}" stroke="#d6e4f7" stroke-width="1"/>`;
     for (let y = 0; y <= ROWS; y++)
       s += `<line x1="${px(0)}" y1="${py(y)}" x2="${px(COLS)}" y2="${py(y)}" stroke="#d6e4f7" stroke-width="1"/>`;
+    return s;
+  }
+
+  function dots() {                               // 격자점
+    let s = '';
+    for (let x = 0; x <= COLS; x++)
+      for (let y = 0; y <= ROWS; y++)
+        s += `<circle cx="${px(x)}" cy="${py(y)}" r="2.4" fill="#8fa6c4" opacity=".55"/>`;
+    return s;
+  }
+
+  function hits() {                               // 터치 영역 (항상 맨 위에)
+    let s = '';
+    for (let x = 0; x <= COLS; x++)
+      for (let y = 0; y <= ROWS; y++)
+        s += `<circle class="hit" cx="${px(x)}" cy="${py(y)}" r="13" fill="transparent" data-x="${x}" data-y="${y}"/>`;
+    return s;
+  }
+
+  // 교과서처럼 "모눈 한 칸 = 1cm"를 표시
+  function unitLabel() {
+    return `<g font-size="10.5" font-weight="700" fill="#64748b">
+      <line x1="${px(0)}" y1="${py(0) - 7}" x2="${px(1)}" y2="${py(0) - 7}" stroke="#64748b" stroke-width="1.2"/>
+      <text x="${px(0.5)}" y="${py(0) - 10}" text-anchor="middle">1 cm</text>
+      <line x1="${px(0) - 7}" y1="${py(0)}" x2="${px(0) - 7}" y2="${py(1)}" stroke="#64748b" stroke-width="1.2"/>
+      <text x="9" y="${py(0.5)}" text-anchor="middle" transform="rotate(-90 9 ${py(0.5)})">1 cm</text>
+    </g>`;
+  }
+
+  // 점 ㄱ, ㄴ 같은 이름표가 붙은 점
+  function markPoint(x, y, label, color) {
+    return `<circle cx="${px(x)}" cy="${py(y)}" r="6" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <text x="${px(x) - 9}" y="${py(y) + 16}" font-size="13" font-weight="900" fill="${color}">${label}</text>`;
+  }
+
+  function wrap(inner, opts) {
+    opts = opts || {};
+    return `<svg class="paper" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">`
+      + DEFS + frame() + (opts.unit ? unitLabel() : '') + inner + dots()
+      + (opts.locked ? '' : hits()) + '</svg>';
+  }
+
+  function svg(q, user, opts) {
+    opts = opts || {};
+    let s = `<svg class="paper" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img">`
+      + DEFS + frame() + (q.unit ? unitLabel() : '');
 
     // 기준선 / 회전 중심 / 밀기 화살표
     if (q.axis) {
@@ -216,10 +262,7 @@
       s += `<polygon points="${poly(q.answer)}" fill="none" stroke="#16a34a" stroke-width="4.5"
               stroke-dasharray="9 6" stroke-linejoin="round" stroke-linecap="round"/>`;
 
-    // 격자점
-    for (let x = 0; x <= COLS; x++)
-      for (let y = 0; y <= ROWS; y++)
-        s += `<circle cx="${px(x)}" cy="${py(y)}" r="2.4" fill="#8fa6c4" opacity=".55"/>`;
+    s += dots();
 
     if (q.center)
       s += `<circle cx="${px(q.center[0])}" cy="${py(q.center[1])}" r="7" fill="#ef4444" stroke="#fff" stroke-width="2.5"/>`;
@@ -230,14 +273,13 @@
       s += `<text x="${px(x)}" y="${py(y) - 12}" text-anchor="middle" font-size="12" font-weight="800" fill="#be185d">${i + 1}</text>`;
     });
 
-    // 터치 영역 (맨 위)
-    if (!opts.locked)
-      for (let x = 0; x <= COLS; x++)
-        for (let y = 0; y <= ROWS; y++)
-          s += `<circle class="hit" cx="${px(x)}" cy="${py(y)}" r="13" fill="transparent" data-x="${x}" data-y="${y}"/>`;
-
+    if (!opts.locked) s += hits();
     return s + '</svg>';
   }
 
-  global.GridMode = { COLS, ROWS, SHAPES, makeDraw, svg, sameSet, bbox };
+  global.GridMode = {
+    COLS, ROWS, CELL, PAD, W, H, SHAPES,
+    makeDraw, svg, sameSet, bbox, move, mirrorX, mirrorY, turn,
+    px, py, poly, wrap, markPoint, pick, rnd
+  };
 })(window);

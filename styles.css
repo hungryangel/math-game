@@ -296,6 +296,26 @@ svg.paper .hit:active{fill:rgba(236,72,153,.22)}
 .draw-tools{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
 .draw-tools .btn{padding:12px 10px;font-size:13.5px}
 
+
+/* 개념 문장 / 보기 고르기 */
+.q-prompt.sentence{
+  background:linear-gradient(140deg,#f8fafc,#eef2ff);border-radius:16px;padding:16px 18px;
+  font-weight:800;line-height:1.7;text-align:center
+}
+.choice-list{display:grid;gap:9px;margin-top:14px}
+.answer.choice{
+  display:grid;grid-template-columns:auto 1fr;align-items:center;justify-items:stretch;
+  gap:11px;padding:14px 15px;text-align:left;
+  font-weight:800;font-size:clamp(13.5px,3.6vw,15.5px);line-height:1.45
+}
+.answer.choice .cno{
+  width:26px;height:26px;border-radius:9px;display:grid;place-items:center;font-size:12.5px;
+  background:#eef2ff;color:var(--primary);flex:0 0 auto
+}
+.answer.choice.correct .cno{background:#dcfce7;color:#15803d}
+.answer.choice.wrong .cno{background:#fee2e2;color:#b91c1c}
+.legend .sw.ptA{background:#1e2a4a;width:11px;height:11px;border-radius:50%}
+
 .feedback{
   margin-top:16px;border-radius:18px;padding:15px 17px;font-weight:700;font-size:14.5px;line-height:1.6;
   display:flex;gap:11px;align-items:flex-start;animation:screenIn .3s

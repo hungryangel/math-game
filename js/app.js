@@ -355,7 +355,8 @@
     const q = S.qs[S.idx];
     if (q.type === 'predict') renderPredict(q);
     else if (q.type === 'identify') renderIdentify(q);
-    else if (q.type === 'draw') renderDraw(q);
+    else if (q.type === 'draw' || q.type === 'point') renderDraw(q);
+    else if (q.type === 'choice' || q.type === 'concept') renderChoice(q);
     else renderBuild(q);
     $('#q-back').onclick = () => {
       Sound.play('tap');
@@ -499,6 +500,8 @@
   /* ---------- 유형 4: 모눈종이에 직접 그리기 (교과서형) ---------- */
   function renderDraw(q) {
     const GM = window.GridMode;
+    const isPoint = q.type === 'point';
+    const draw = isPoint ? window.Textbook.svgPoint : GM.svg;
     let user = [], locked = false;
 
     $('#screen-quiz').innerHTML = `
@@ -506,24 +509,27 @@
       <div class="card">
         <div class="q-prompt">${q.prompt}</div>
         <div class="legend">
-          <span><i class="sw orig"></i>처음 도형</span>
-          <span><i class="sw mine"></i>내가 그린 도형</span>
+          ${isPoint
+            ? '<span><i class="sw ptA"></i>점 ㄱ (처음)</span><span><i class="sw mine"></i>내가 찍은 점 ㄴ</span>'
+            : '<span><i class="sw orig"></i>처음 도형</span><span><i class="sw mine"></i>내가 그린 도형</span>'}
           ${q.axis ? '<span><i class="sw axis"></i>기준선</span>' : ''}
           ${q.center ? '<span><i class="sw ctr"></i>회전 중심</span>' : ''}
         </div>
         <div class="paper-wrap" id="q-paper"></div>
         <div class="move-count" id="q-count"></div>
-        <div class="draw-tools">
-          <button class="btn ghost" id="q-undo">↩︎ 한 점 지우기</button>
-          <button class="btn ghost" id="q-clear">🧽 전체 지우기</button>
+        <div class="draw-tools" ${isPoint ? 'style="grid-template-columns:1fr"' : ''}>
+          ${isPoint ? '' : '<button class="btn ghost" id="q-undo">↩︎ 한 점 지우기</button>'}
+          <button class="btn ghost" id="q-clear">🧽 ${isPoint ? '다시 찍기' : '전체 지우기'}</button>
         </div>
         <button class="btn block" id="q-check" style="margin-top:10px" disabled>정답 확인</button>
         <div id="q-feed"></div>
       </div>`;
 
     const paint = () => {
-      $('#q-paper').innerHTML = GM.svg(q, user, { locked, showAnswer: locked });
-      $('#q-count').innerHTML = `찍은 점 <b>${user.length}</b> / ${q.need}개`;
+      $('#q-paper').innerHTML = draw(q, user, { locked, showAnswer: locked });
+      $('#q-count').innerHTML = isPoint
+        ? (user.length ? '점 ㄴ을 찍었어요. 확인해 볼까요?' : '모눈의 점을 눌러 <b>점 ㄴ</b>을 표시하세요')
+        : `찍은 점 <b>${user.length}</b> / ${q.need}개`;
       $('#q-check').disabled = locked || user.length !== q.need;
     };
     paint();
@@ -533,7 +539,8 @@
       if (!hit || locked) return;
       const x = +hit.dataset.x, y = +hit.dataset.y;
       const last = user[user.length - 1];
-      if (last && last[0] === x && last[1] === y) user.pop();          // 마지막 점을 다시 누르면 취소
+      if (isPoint) user = [[x, y]];                                    // 점 이동은 누를 때마다 위치를 바꾼다
+      else if (last && last[0] === x && last[1] === y) user.pop();     // 마지막 점을 다시 누르면 취소
       else if (user.some(p => p[0] === x && p[1] === y)) { toast('이미 찍은 점이에요'); return; }
       else if (user.length >= q.need) { toast(`점은 ${q.need}개까지만 찍을 수 있어요`); return; }
       else user.push([x, y]);
@@ -541,18 +548,56 @@
       paint();
     };
 
-    $('#q-undo').onclick = () => { if (locked || !user.length) return; user.pop(); Sound.play('tap'); paint(); };
+    if ($('#q-undo'))
+      $('#q-undo').onclick = () => { if (locked || !user.length) return; user.pop(); Sound.play('tap'); paint(); };
     $('#q-clear').onclick = () => { if (locked) return; user = []; Sound.play('tap'); paint(); };
 
     $('#q-check').onclick = async () => {
       if (locked || user.length !== q.need) return;
-      const ok = GM.sameSet(user, q.answer);
+      const ok = isPoint
+        ? (user[0][0] === q.answer[0] && user[0][1] === q.answer[1])
+        : GM.sameSet(user, q.answer);
       locked = true;
-      if (ok) user = q.answer.slice();     // 정답이면 꼭짓점 순서대로 반듯하게 다시 그려 준다
+      if (ok && !isPoint) user = q.answer.slice();   // 정답이면 꼭짓점 순서대로 반듯하게 다시 그려 준다
       paint();
       await showFeedback(ok, q, null, ok
         ? `<b>정확해요!</b> ${q.hint}`
-        : `<b>아쉬워요!</b> ${q.hint}<br>초록 점선이 정답 위치예요. 꼭짓점 하나씩 칸을 세어 비교해 보세요.`);
+        : `<b>아쉬워요!</b> ${q.hint}<br>${isPoint
+            ? '초록 화살표가 실제 이동 경로예요. 방향과 칸 수를 다시 세어 보세요.'
+            : '초록 점선이 정답 위치예요. 꼭짓점 하나씩 칸을 세어 비교해 보세요.'}`);
+    };
+  }
+
+  /* ---------- 유형 5: 그림/개념 보고 고르기 (교과서 '알맞은 말에 ○표') ---------- */
+  function renderChoice(q) {
+    const hasImage = !!(q.figures || q.marks);
+    $('#screen-quiz').innerHTML = `
+      ${headHTML()}
+      <div class="card">
+        <div class="q-prompt sentence">${q.prompt}</div>
+        ${hasImage ? `<div class="paper-wrap">${window.Textbook.svgChoice(q)}</div>` : ''}
+        <div class="choice-list" id="q-opts">
+          ${q.options.map((t, i) => `
+            <button class="answer choice" data-i="${i}">
+              <span class="cno">${i + 1}</span><span class="ctxt">${t}</span>
+            </button>`).join('')}
+        </div>
+        <div id="q-feed"></div>
+      </div>`;
+
+    $('#q-opts').onclick = async e => {
+      const b = e.target.closest('.answer');
+      if (!b || $('#q-opts').dataset.done) return;
+      $('#q-opts').dataset.done = '1';
+      const chosen = +b.dataset.i, ok = chosen === q.answerIndex;
+      [...$('#q-opts').children].forEach((o, i) => {
+        if (i === q.answerIndex) o.classList.add('correct');
+        else if (i === chosen) o.classList.add('wrong');
+        else o.classList.add('dim');
+      });
+      await showFeedback(ok, q, null, ok
+        ? `<b>맞았어요!</b> ${q.hint}`
+        : `<b>아쉬워요!</b> 정답은 <b>${q.options[q.answerIndex]}</b> 예요.<br>${q.hint}`);
     };
   }
 
