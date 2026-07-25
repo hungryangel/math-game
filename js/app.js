@@ -286,10 +286,10 @@
               const stars = starsOf(s.id), open = isUnlocked(s.id);
               return `<button class="stage-item ${open ? '' : 'locked'} ${stars ? 'cleared' : ''}"
                         data-stage="${s.id}" ${open ? '' : 'disabled'}>
-                <span class="stage-no" style="--c:${ch.color}">${open ? (stars ? '✓' : ch.id + '-' + (i + 1)) : '🔒'}</span>
+                <span class="stage-no" style="--c:${ch.color}">${open ? (stars ? '✓' : i + 1) : '🔒'}</span>
                 <span class="stage-meta">
                   <b>${s.name}${s.boss ? '<span class="boss-tag">BOSS</span>' : ''}</b>
-                  <span>${s.count}문제 · ${typeLabel(s.types)}</span>
+                  <span>${s.count}문제 · ${typeLabel(s)}</span>
                 </span>
                 <span class="stars"><i class="${stars > 0 ? 'on' : ''}">⭐</i><i class="${stars > 1 ? 'on' : ''}">⭐</i><i class="${stars > 2 ? 'on' : ''}">⭐</i></span>
               </button>`;
@@ -309,9 +309,12 @@
     show('map');
   }
 
-  function typeLabel(types) {
-    const m = { predict: '결과 맞히기', identify: '동작 찾기', build: '직접 조작' };
-    return types.map(t => m[t]).join(' + ');
+  function typeLabel(stage) {
+    const byType = { predict: '결과 맞히기', identify: '동작 찾기', build: '직접 조작', draw: '직접 그리기' };
+    const byKind = { point: '점 이동', pointBack: '이동 방법 찾기', distance: '밀기 거리 구하기', concept: '개념 문장' };
+    if (stage.types.includes('textbook'))
+      return [...new Set((stage.kinds || []).map(k => byKind[k]).filter(Boolean))].join(' + ');
+    return [...new Set(stage.types.map(t => byType[t]).filter(Boolean))].join(' + ');
   }
 
   /* =========================================================
